@@ -10,6 +10,7 @@ if (!isset($_SESSION['user'])) {
 
 $search = trim($_GET['search'] ?? '');
 $category_filter = trim($_GET['category_id'] ?? '');
+$sort = trim($_GET['sort'] ?? 'name_asc'); // Default urutkan berdasarkan Nama A-Z
 
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 5;
@@ -25,6 +26,28 @@ if ($search !== '') {
 if ($category_filter !== '') {
     $sql .= " AND p.category_id = :category_id";
     $params['category_id'] = $category_filter;
+}
+
+// Logika Sorting (Pengurutan Data)
+switch ($sort) {
+    case 'name_desc':
+        $sql .= " ORDER BY p.name DESC";
+        break;
+    case 'price_asc':
+        $sql .= " ORDER BY p.price ASC";
+        break;
+    case 'price_desc':
+        $sql .= " ORDER BY p.price DESC";
+        break;
+    case 'stock_asc':
+        $sql .= " ORDER BY p.stock ASC";
+        break;
+    case 'stock_desc':
+        $sql .= " ORDER BY p.stock DESC";
+        break;
+    default:
+        $sql .= " ORDER BY p.name ASC";
+        break;
 }
 
 $stmt_total = $pdo->prepare($sql);
@@ -59,7 +82,6 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
         .btn-back { display: inline-block; margin-bottom: 20px; color: #1e3a8a; text-decoration: none; font-weight: 600; font-size: 14px; }
         .btn-back:hover { text-decoration: underline; }
 
-        /* Wadah Notifikasi / Alert */
         .alert-success { background: #f0fdf4; color: #166534; padding: 14px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; border: 1px solid #bbf7d0; font-weight: 500; }
         .alert-error { background: #fef2f2; color: #991b1b; padding: 14px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; border: 1px solid #fecaca; font-weight: 500; }
 
@@ -72,7 +94,7 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
         .btn-add:hover { background: #15803d; }
 
         .form-filter { display: flex; gap: 12px; margin-bottom: 25px; flex-wrap: wrap; background: #eef2f7; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; }
-        .form-filter input, .form-filter select { padding: 10px 14px; border: 1px solid #94a3b8; border-radius: 6px; font-size: 14px; outline: none; flex: 1; min-width: 200px; background: white; }
+        .form-filter input, .form-filter select { padding: 10px 14px; border: 1px solid #94a3b8; border-radius: 6px; font-size: 14px; outline: none; flex: 1; min-width: 180px; background: white; }
         .form-filter button { padding: 10px 20px; background: #1e3a8a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; }
         .form-filter button:hover { background: #172554; }
         .btn-reset { padding: 10px 16px; background: #475569; color: white; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; }
@@ -116,7 +138,6 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
     <div class="main-container">
         <a href="../dashboard.php" class="btn-back">← Kembali ke Dashboard</a>
 
-        <!-- Wadah Notifikasi / Flash Message -->
         <?php if (isset($_SESSION['success'])): ?>
             <div class="alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div>
         <?php endif; ?>
@@ -128,13 +149,15 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
             <div class="header-area">
                 <div>
                     <h2>Daftar Produk Barang</h2>
-                    <p class="subtitle">Kelola inventaris gudang dan pemantauan stok produk</p>
+                    <p class="subtitle">Kelola inventaris gudang, pencarian, filter, dan pengurutan data produk</p>
                 </div>
                 <a href="create.php" class="btn-add">+ Tambah Produk Baru</a>
             </div>
 
+            <!-- Form Search, Filter, & Sorting -->
             <form method="GET" class="form-filter">
                 <input type="text" name="search" placeholder="Cari Nama / SKU..." value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
+                
                 <select name="category_id">
                     <option value="">-- Semua Kategori --</option>
                     <?php foreach ($categories as $cat): ?>
@@ -143,7 +166,17 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <button type="submit">Cari & Filter</button>
+
+                <select name="sort">
+                    <option value="name_asc" <?php echo $sort === 'name_asc' ? 'selected' : ''; ?>>Nama (A - Z)</option>
+                    <option value="name_desc" <?php echo $sort === 'name_desc' ? 'selected' : ''; ?>>Nama (Z - A)</option>
+                    <option value="price_asc" <?php echo $sort === 'price_asc' ? 'selected' : ''; ?>>Harga Terendah</option>
+                    <option value="price_desc" <?php echo $sort === 'price_desc' ? 'selected' : ''; ?>>Harga Tertinggi</option>
+                    <option value="stock_asc" <?php echo $sort === 'stock_asc' ? 'selected' : ''; ?>>Stok Sedikit</option>
+                    <option value="stock_desc" <?php echo $sort === 'stock_desc' ? 'selected' : ''; ?>>Stok Terbanyak</option>
+                </select>
+                
+                <button type="submit">Terapkan</button>
                 <a href="index.php" class="btn-reset">Reset</a>
             </form>
 
@@ -194,7 +227,7 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
                 <?php if ($total_pages > 1): ?>
                 <div class="pagination">
                     <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                        <a href="index.php?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&category_id=<?php echo $category_filter; ?>" class="<?php echo $page === $i ? 'active' : ''; ?>"><?php echo $i; ?></a>
+                        <a href="index.php?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&category_id=<?php echo $category_filter; ?>&sort=<?php echo $sort; ?>" class="<?php echo $page === $i ? 'active' : ''; ?>"><?php echo $i; ?></a>
                     <?php endfor; ?>
                 </div>
                 <?php endif; ?>
